@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <title>Автобусы Мирный</title>
+    <title>Автобусы Мирного</title>
+
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icon-192.png">
     <meta name="theme-color" content="#0071e3">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Автобусы">
+
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -38,6 +38,7 @@
             <select id="to-select">
                 <option value="">— выберите остановку —</option>
             </select>
+
             <label>Режим:</label>
             <div style="display: flex; gap: 8px; margin-top: 4px;">
                 <label style="flex: 1; margin: 0; display: flex; align-items: center; gap: 4px; font-weight: normal;">
@@ -49,6 +50,7 @@
             </div>
 
             <button id="find-btn">Найти ближайшие рейсы</button>
+            <button id="refresh-btn" style="background: #86868b; margin-top: 8px;">🔄 Обновить данные</button>
         </section>
 
         <section id="results">
@@ -58,13 +60,13 @@
 
     <script src="app.js"></script>
     <script>
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('sw.js')
-                .then((reg) => console.log('SW зарегистрирован:', reg.scope))
-                .catch((err) => console.error('SW ошибка:', err));
-        });
-    }
-</script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then((reg) => console.log('SW зарегистрирован:', reg.scope))
+                    .catch((err) => console.error('SW ошибка:', err));
+            });
+        }
+    </script>
 </body>
 </html>

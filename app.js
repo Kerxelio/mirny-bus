@@ -1,39 +1,25 @@
 // ====== Глобальные данные ======
 let routesData = null;
-let allStops = [];          // массив { name, routeNums: Set }
-let stopToRoutes = {};      // { stopName: [ { routeNum, segment, dayType } ] }
+let allStops = [];
 
 // ====== Утилиты ======
 
-// Определяем тип дня: '-1' (Пн/Ср/Пт/Вс) или '-2' (Вт/Чт/Сб)
 function getCurrentDayType() {
-    const d = new Date().getDay(); // 0=Вс, 1=Пн, ..., 6=Сб
-    // '-1': Пн(1), Ср(3), Пт(5), Вс(0)
+    const d = new Date().getDay();
     if (d === 1 || d === 3 || d === 5 || d === 0) return '-1';
-    // '-2': Вт(2), Чт(4), Сб(6)
     return '-2';
 }
 
-// Текущее время в минутах от полуночи
 function nowMinutes() {
     const d = new Date();
     return d.getHours() * 60 + d.getMinutes();
 }
 
-// 'HH:MM' → минуты
 function timeToMinutes(t) {
     const [h, m] = t.split(':').map(Number);
     return h * 60 + m;
 }
 
-// Минуты → 'HH:MM'
-function minutesToTime(m) {
-    const h = Math.floor(m / 60) % 24;
-    const mm = m % 60;
-    return String(h).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
-}
-
-// Человекочитаемый обратный отсчёт
 function formatCountdown(diffMin) {
     if (diffMin < 0) return '';
     if (diffMin === 0) return 'сейчас';
@@ -44,7 +30,6 @@ function formatCountdown(diffMin) {
     return m === 0 ? `через ${h} ч` : `через ${h} ч ${m} мин`;
 }
 
-// Направление на русском
 function directionLabel(dir) {
     switch (dir) {
         case 'to_work':   return '→ К месту работы';
@@ -65,41 +50,24 @@ async function loadData() {
 }
 
 function buildStopIndex() {
-    // Собираем все уникальные остановки из всех маршрутов
     const stopsSet = new Set();
-    stopToRoutes = {};
-
     for (const routeNum of Object.keys(routesData)) {
         for (const route of routesData[routeNum].routes) {
-            const dayType = route.days.includes('monday') && route.days.includes('sunday')
-                ? '-1'
-                : (route.days.includes('tuesday') ? '-2' : null);
-
             for (const seg of route.segments) {
                 for (const trip of seg.trips) {
                     for (const stop of trip.stops) {
                         stopsSet.add(stop.name);
-                        if (!stopToRoutes[stop.name]) stopToRoutes[stop.name] = [];
-                        stopToRoutes[stop.name].push({
-                            routeNum,
-                            segment: seg,
-                            dayType,
-                            sheet: route.sheet,
-                        });
                     }
                 }
             }
         }
     }
-
     allStops = Array.from(stopsSet).sort((a, b) => a.localeCompare(b, 'ru'));
 }
 
 function fillStopSelects() {
     const fromSel = document.getElementById('from-select');
     const toSel = document.getElementById('to-select');
-
-    // Очищаем, оставляем только первый option
     fromSel.length = 1;
     toSel.length = 1;
 
@@ -116,16 +84,16 @@ function fillStopSelects() {
     }
 }
 
-// ====== Поиск ближайших рейсов ======
+// ====== Поиск рейсов ======
 
 function findUpcomingTrips(fromStop, toStop, dayFilter) {
     const dayType = dayFilter === 'auto' ? getCurrentDayType() : dayFilter;
     const now = nowMinutes();
     const results = [];
+    const mode = document.querySelector('input[name="mode"]:checked')?.value || 'upcoming';
 
     for (const routeNum of Object.keys(routesData)) {
         for (const route of routesData[routeNum].routes) {
-            // Определяем тип дня для этого листа
             const sheetDayType = route.days.includes('monday') && route.days.includes('sunday')
                 ? '-1'
                 : (route.days.includes('tuesday') ? '-2' : null);
@@ -137,22 +105,18 @@ function findUpcomingTrips(fromStop, toStop, dayFilter) {
                     const idxFrom = trip.stops.findIndex(s => s.name === fromStop);
                     const idxTo = trip.stops.findIndex(s => s.name === toStop);
                     if (idxFrom < 0 || idxTo < 0) continue;
-                    // Автобус должен ехать ВПЕРЁД (от from к to)
                     if (idxTo <= idxFrom) continue;
 
                     const stopTime = trip.stops[idxFrom].time;
                     const stopMin = timeToMinutes(stopTime);
                     let diff = stopMin - now;
 
-                    // Ночные рейсы (после полуночи): если разница меньше -12 часов,
-                    // значит рейс "завтра" — переносим его на сутки вперёд.
-                    if (diff < -720) {
+                    // Ночные рейсы (до 4:00) считаем "завтрашними"
+                    const isNightTrip = stopMin < 4 * 60;
+                    if (isNightTrip && diff < -2) {
                         diff += 24 * 60;
                     }
 
-                    const mode = document.querySelector('input[name="mode"]:checked').value;
-
-                    // В режиме "Ближайшие" пропускаем уже прошедшие рейсы
                     if (mode === 'upcoming' && diff < -2) continue;
 
                     results.push({
@@ -160,17 +124,16 @@ function findUpcomingTrips(fromStop, toStop, dayFilter) {
                         direction: seg.direction,
                         time: stopTime,
                         diff,
-                        departure: trip.departure,
+                        isNight: isNightTrip,
                     });
                 }
             }
         }
     }
 
-    // Сортируем по ближайшему времени
     results.sort((a, b) => a.diff - b.diff);
 
-    // Убираем дубликаты (одинаковый маршрут + время + направление)
+    // Убираем дубликаты
     const seen = new Set();
     const unique = [];
     for (const r of results) {
@@ -180,7 +143,6 @@ function findUpcomingTrips(fromStop, toStop, dayFilter) {
         unique.push(r);
     }
 
-    const mode = document.querySelector('input[name="mode"]:checked').value;
     if (mode === 'upcoming') {
         return unique.slice(0, 8);
     }
@@ -193,10 +155,8 @@ function renderResults(trips, fromStop, toStop) {
     const results = document.getElementById('results');
     results.innerHTML = '';
 
-    // Определяем текущий режим
     const mode = document.querySelector('input[name="mode"]:checked')?.value || 'upcoming';
 
-    // Если рейсов нет
     if (trips.length === 0) {
         const msg = mode === 'upcoming'
             ? 'На сегодня рейсов больше нет. 😔<br>Попробуйте режим «Все на день» или другой день недели.'
@@ -205,7 +165,6 @@ function renderResults(trips, fromStop, toStop) {
         return;
     }
 
-    // Заголовок
     const header = document.createElement('p');
     header.className = 'hint';
     header.style.marginBottom = '12px';
@@ -213,26 +172,17 @@ function renderResults(trips, fromStop, toStop) {
     header.textContent = `${fromStop} → ${toStop}${countLabel}`;
     results.appendChild(header);
 
-    // Текущее время для определения "прошедших"
-    const now = nowMinutes();
-
-    // Отрисовка каждого рейса
     for (const t of trips) {
         const div = document.createElement('div');
         div.className = 'trip';
 
-        // В режиме "Все" приглушаем прошедшие рейсы
         const isPast = mode === 'all' && t.diff < -2;
-        if (isPast) {
-            div.style.opacity = '0.45';
-        }
+        if (isPast) div.style.opacity = '0.45';
 
-        // Обратный отсчёт: показываем только для будущих рейсов
         let countdown = '';
         if (isPast) {
             countdown = 'уже прошёл';
         } else if (t.diff > 12 * 60) {
-            // Больше 12 часов — вероятно, это завтрашний ночной рейс
             countdown = 'завтра, ' + formatCountdown(t.diff - 24 * 60);
         } else {
             countdown = formatCountdown(t.diff);
@@ -250,7 +200,7 @@ function renderResults(trips, fromStop, toStop) {
     }
 }
 
-// ====== Главный обработчик ======
+// ====== Обработчики ======
 
 function onFindClick() {
     const fromStop = document.getElementById('from-select').value;
@@ -265,35 +215,24 @@ function onFindClick() {
         alert('Остановки должны быть разными');
         return;
     }
-        // Сохраняем выбор пользователя
+
+    // Сохраняем выбор
     localStorage.setItem('bus_from_stop', fromStop);
     localStorage.setItem('bus_to_stop', toStop);
+    localStorage.setItem('bus_day_filter', dayFilter);
 
     const trips = findUpcomingTrips(fromStop, toStop, dayFilter);
     renderResults(trips, fromStop, toStop);
 }
 
-// ====== Автообновление раз в минуту ======
-
-let lastFromStop = '';
-let lastToStop = '';
-let lastDayFilter = 'auto';
-
-function autoRefresh() {
+// Автообновление раз в минуту
+setInterval(() => {
     const fromStop = document.getElementById('from-select').value;
     const toStop = document.getElementById('to-select').value;
-    const dayFilter = document.getElementById('day-select').value;
-
     if (fromStop && toStop && fromStop !== toStop) {
-        lastFromStop = fromStop;
-        lastToStop = toStop;
-        lastDayFilter = dayFilter;
-        const trips = findUpcomingTrips(fromStop, toStop, dayFilter);
-        renderResults(trips, fromStop, toStop);
+        onFindClick();
     }
-}
-
-setInterval(autoRefresh, 60 * 1000); // раз в минуту
+}, 60 * 1000);
 
 // ====== Старт ======
 
@@ -302,10 +241,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await loadData();
         document.getElementById('find-btn').addEventListener('click', onFindClick);
 
-        // Если день недели определился — подставляем автоматически
-        // (оставляем 'auto', он и так работает)
-
-        // Обработчик изменения select — сразу пересчитываем
+        // Пересчёт при смене селектов и режима
         ['from-select', 'to-select', 'day-select'].forEach(id => {
             document.getElementById(id).addEventListener('change', () => {
                 if (document.getElementById('from-select').value &&
@@ -313,32 +249,55 @@ document.addEventListener('DOMContentLoaded', async () => {
                     onFindClick();
                 }
             });
-                // Восстанавливаем последние выбранные остановки из localStorage
+        });
+        document.querySelectorAll('input[name="mode"]').forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (document.getElementById('from-select').value &&
+                    document.getElementById('to-select').value) {
+                    onFindClick();
+                }
+            });
+        });
+
+        // Восстанавливаем последний выбор
         const savedFrom = localStorage.getItem('bus_from_stop');
         const savedTo = localStorage.getItem('bus_to_stop');
+        const savedDay = localStorage.getItem('bus_day_filter');
+
         if (savedFrom && allStops.includes(savedFrom)) {
             document.getElementById('from-select').value = savedFrom;
         }
         if (savedTo && allStops.includes(savedTo)) {
             document.getElementById('to-select').value = savedTo;
         }
+        if (savedDay) {
+            document.getElementById('day-select').value = savedDay;
+        }
 
-        // Автоматически показываем результат, если оба сохранены
+        // Автоматически показываем результат
         if (document.getElementById('from-select').value &&
             document.getElementById('to-select').value &&
             document.getElementById('from-select').value !== document.getElementById('to-select').value) {
             onFindClick();
-        }    
-        });
-        // Реагируем на смену режима
-    document.querySelectorAll('input[name="mode"]').forEach(radio => {
-        radio.addEventListener('change', () => {
-            if (document.getElementById('from-select').value &&
-                document.getElementById('to-select').value) {
-                onFindClick();
+        }
+
+        // Кнопка «Обновить данные»
+        document.getElementById('refresh-btn').addEventListener('click', async () => {
+            if (!confirm('Обновить расписание? Приложение перезагрузит свежие данные с сервера.')) return;
+            try {
+                if ('caches' in window) {
+                    const keys = await caches.keys();
+                    await Promise.all(keys.map(k => caches.delete(k)));
+                }
+                if ('serviceWorker' in navigator) {
+                    const regs = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(regs.map(r => r.unregister()));
+                }
+                location.reload(true);
+            } catch (e) {
+                alert('Ошибка обновления: ' + e.message);
             }
         });
-    });
     } catch (e) {
         document.getElementById('results').innerHTML =
             `<p class="no-trips">Ошибка загрузки данных: ${e.message}</p>`;
