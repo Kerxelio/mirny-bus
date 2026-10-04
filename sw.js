@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mirny-bus-v1';
+const CACHE_NAME = 'mirny-bus-v3';
 const URLS_TO_CACHE = [
     './',
     './index.html',

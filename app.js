@@ -143,9 +143,16 @@ function findUpcomingTrips(fromStop, toStop, dayFilter) {
                     const stopTime = trip.stops[idxFrom].time;
                     const stopMin = timeToMinutes(stopTime);
                     let diff = stopMin - now;
-                    // Если рейс уже прошёл сегодня — пропускаем.
-                    // (Можно учесть "завтра", но для простоты не будем.)
+
+                    // Ночные рейсы (после полуночи): если разница меньше -12 часов,
+                    // значит рейс "завтра" — переносим его на сутки вперёд.
+                    if (diff < -720) {
+                        diff += 24 * 60;
+                    }
+
                     const mode = document.querySelector('input[name="mode"]:checked').value;
+
+                    // В режиме "Ближайшие" пропускаем уже прошедшие рейсы
                     if (mode === 'upcoming' && diff < -2) continue;
 
                     results.push({
@@ -222,10 +229,13 @@ function renderResults(trips, fromStop, toStop) {
 
         // Обратный отсчёт: показываем только для будущих рейсов
         let countdown = '';
-        if (!isPast) {
-            countdown = formatCountdown(t.diff);
-        } else {
+        if (isPast) {
             countdown = 'уже прошёл';
+        } else if (t.diff > 12 * 60) {
+            // Больше 12 часов — вероятно, это завтрашний ночной рейс
+            countdown = 'завтра, ' + formatCountdown(t.diff - 24 * 60);
+        } else {
+            countdown = formatCountdown(t.diff);
         }
 
         div.innerHTML = `
@@ -255,6 +265,9 @@ function onFindClick() {
         alert('Остановки должны быть разными');
         return;
     }
+        // Сохраняем выбор пользователя
+    localStorage.setItem('bus_from_stop', fromStop);
+    localStorage.setItem('bus_to_stop', toStop);
 
     const trips = findUpcomingTrips(fromStop, toStop, dayFilter);
     renderResults(trips, fromStop, toStop);
@@ -300,6 +313,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                     onFindClick();
                 }
             });
+                // Восстанавливаем последние выбранные остановки из localStorage
+        const savedFrom = localStorage.getItem('bus_from_stop');
+        const savedTo = localStorage.getItem('bus_to_stop');
+        if (savedFrom && allStops.includes(savedFrom)) {
+            document.getElementById('from-select').value = savedFrom;
+        }
+        if (savedTo && allStops.includes(savedTo)) {
+            document.getElementById('to-select').value = savedTo;
+        }
+
+        // Автоматически показываем результат, если оба сохранены
+        if (document.getElementById('from-select').value &&
+            document.getElementById('to-select').value &&
+            document.getElementById('from-select').value !== document.getElementById('to-select').value) {
+            onFindClick();
+        }    
         });
         // Реагируем на смену режима
     document.querySelectorAll('input[name="mode"]').forEach(radio => {
