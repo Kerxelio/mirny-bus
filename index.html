@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>Автобусы Мирный</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>🚌 Автобусы Мирного</h1>
+        <p class="subtitle">Маршруты 51, 52, 53, 54</p>
+    </header>
+
+    <main>
+        <section class="selector">
+            <label for="day-select">День недели:</label>
+            <select id="day-select">
+                <option value="auto">Сегодня (авто)</option>
+                <option value="-1">Пн / Ср / Пт / Вс</option>
+                <option value="-2">Вт / Чт / Сб</option>
+            </select>
+
+            <label for="from-select">Откуда (я сейчас здесь):</label>
+            <select id="from-select">
+                <option value="">— выберите остановку —</option>
+            </select>
+
+            <label for="to-select">Куда (хочу доехать):</label>
+            <select id="to-select">
+                <option value="">— выберите остановку —</option>
+            </select>
+            <label>Режим:</label>
+            <div style="display: flex; gap: 8px; margin-top: 4px;">
+                <label style="flex: 1; margin: 0; display: flex; align-items: center; gap: 4px; font-weight: normal;">
+                    <input type="radio" name="mode" value="upcoming" checked> Ближайшие
+                </label>
+                <label style="flex: 1; margin: 0; display: flex; align-items: center; gap: 4px; font-weight: normal;">
+                    <input type="radio" name="mode" value="all"> Все на день
+                </label>
+            </div>
+
+            <button id="find-btn">Найти ближайшие рейсы</button>
+        </section>
+
+        <section id="results">
+            <p class="hint">Выберите остановки и нажмите «Найти».</p>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
